@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgriScan AI — Crop Disease Detection</title>
+
+    <!-- Google Fonts: Outfit for headings, Source Sans 3 for body -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='AGRIFAVICON.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
+
+    <style>
+        /* ══════════════════════════════════════════════
+       CSS VARIABLES — change colours here globally
+    ══════════════════════════════════════════════ */
+        
+         :root {
+            --green-dark: #1a5c2a;
+            --green-main: #2d8c3e;
+            --green-mid: #3aad52;
+            --green-light: #e8f5eb;
+            --green-accent: #5cc96e;
+            --text-dark: #1a2e1d;
+            --text-mid: #3d5c42;
+            --text-light: #7a9980;
+            --border: #c8e6cc;
+            --white: #ffffff;
+            --bg: #f4faf5;
+            --card: #ffffff;
+            --radius: 14px;
+            --shadow: 0 2px 20px rgba(30, 100, 40, 0.08);
+            --shadow-lg: 0 8px 40px rgba(30, 100, 40, 0.13);
+        }
+        /* ══════════════════════════════════════════════ RESET */
+        
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--bg);
+            color: var(--text-dark);
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        /* ══════════════════════════════════════════════ NAV */
+        
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            height: 60px;
+            gap: 40px;
+        }
+        
+        .nav-brand {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 1.25rem;
+            color: var(--green-dark);
+            text-decoration: none;
+            margin-right: auto;
+        }
+        
+        .nav-links a {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-mid);
+            text-decoration: none;
+            padding: 4px 0;
+            border-bottom: 2px solid transparent;
+            transition: color .2s, border-color .2s;
+        }
+        
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--green-dark);
+            border-color: var(--green-main);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 32px;
+        }
+        
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+        
+        .nav-toggle {
+            display: none;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            padding: 10px;
+            margin-left: auto;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .nav-toggle span {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--green-dark);
+            border-radius: 2px;
+            transition: transform .25s ease, opacity .2s ease;
+            margin: 4px 0;
+        }
+        
+        .nav-toggle.active span:nth-child(1) {
+            transform: translateY(6px) rotate(45deg);
+        }
+        
+        .nav-toggle.active span:nth-child(2) {
+            opacity: 0;
+        }
+        
+        .nav-toggle.active span:nth-child(3) {
+            transform: translateY(-6px) rotate(-45deg);
+        }
+        
+        .btn-get-started {
+            background: var(--green-main);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 9px 22px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .2s, transform .15s;
+        }
+        
+        .btn-get-started:hover {
+            background: var(--green-dark);
+            transform: translateY(-1px);
+        }
+        
+        @media (max-width: 768px) {
+            nav {
+                padding: 0 20px;
+            }
+            .nav-menu {
+                position: absolute;
+                top: 60px;
+                left: 0;
+                right: 0;
+                z-index: 90;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0;
+                background: rgba(255, 255, 255, 0.98);
+                border-bottom: 1px solid var(--border);
+                box-shadow: 0 14px 26px rgba(30, 100, 40, 0.08);
+                padding: 0 20px 20px;
+                transform: translateY(-110%);
+                opacity: 0;
+                pointer-events: none;
+                transition: transform .3s ease, opacity .25s ease;
+            }
+            .nav-menu.open {
+                transform: translateY(0);
+                opacity: 1;
+                pointer-events: auto;
+            }
+            .nav-links {
+                flex-direction: column;
+                gap: 0;
+                width: 100%;
+                padding-top: 16px;
+            }
+            .nav-links a {
+                display: block;
+                width: 100%;
+                padding: 14px 0;
+                color: var(--text-mid);
+                border-bottom: 1px solid rgba(45, 140, 62, 0.12);
+            }
+            .nav-links a.active,
+            .nav-links a:hover {
+                color: var(--green-dark);
+                border-color: rgba(45, 140, 62, 0.18);
+            }
+            .btn-get-started {
+                width: 100%;
+                margin-top: 16px;
+            }
+            .nav-toggle {
+                display: flex;
+            }
+            .nav-links {
+                margin: 0;
+            }
+            .nav-links a {
+                font-size: 0.95rem;
+                font-weight: 600;
+            }
+        }
+        /* ══════════════════════════════════════════════ HERO */
+        
+        .hero {
+            text-align: center;
+            padding: 64px 20px 40px;
+        }
+        
+        .hero h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: clamp(2rem, 5vw, 3rem);
+            color: var(--green-dark);
+            line-height: 1.2;
+            max-width: 640px;
+            margin: 0 auto 16px;
+        }
+        
+        .hero p {
+            color: var(--text-mid);
+            max-width: 520px;
+            margin: 0 auto 32px;
+            font-size: 1.05rem;
+        }
+        
+        .hero-img-wrap {
+            max-width: 520px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .hero-img-wrap img {
+            width: 100%;
+            display: block;
+        }
+        /* ══════════════════════════════════════════════ MAIN GRID */
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            max-width: 900px;
+            margin: 48px auto;
+            padding: 0 20px;
+        }
+        
+        @media (max-width: 700px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        /* ══════════════════════════════════════════════ CARD */
+        
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px;
+            box-shadow: var(--shadow);
+        }
+        
+        .card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card-title svg {
+            color: var(--green-main);
+            flex-shrink: 0;
+        }
+        /* ══════════════════════════════════════════════ FORM ELEMENTS */
+        
+        label.field-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-mid);
+            margin-bottom: 6px;
+        }
+        
+        select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 0.95rem;
+            color: var(--text-dark);
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%233d5c42' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E") no-repeat right 12px center;
+            appearance: none;
+            cursor: pointer;
+            transition: border-color .2s, box-shadow .2s;
+            margin-bottom: 16px;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: var(--green-main);
+            box-shadow: 0 0 0 3px rgba(45, 140, 62, .15);
+        }
+        /* ══════════════════════════════════════════════ INPUT TABS (Upload / Camera) */
+        
+        .input-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 9px 12px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: background .2s, color .2s;
+        }
+        
+        .tab-btn.active {
+            background: var(--green-light);
+            color: var(--green-dark);
+        }
+        
+        .tab-btn:not(.active):hover {
+            background: #f0f8f2;
+        }
+        /* ══════════════════════════════════════════════ UPLOAD DROP ZONE */
+        
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 32px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .2s, background .2s;
+            position: relative;
+            overflow: hidden;
+            background: #fafffe;
+        }
+        
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: var(--green-main);
+            background: var(--green-light);
+        }
+        
+        .drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .drop-zone svg {
+            color: var(--green-main);
+            margin-bottom: 10px;
+        }
+        
+        .drop-zone p {
+            font-size: 0.9rem;
+            color: var(--text-mid);
+            margin: 0;
+        }
+        
+        .drop-zone small {
+            color: var(--text-light);
+            font-size: 0.8rem;
+        }
+        /* Preview thumbnail inside drop zone */
+        
+        #preview-img {
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 8px;
+            margin: 10px auto 0;
+            display: none;
+        }
+        /* ══════════════════════════════════════════════ CAMERA PANEL */
+        
+        #camera-panel {
+            display: none;
+        }
+        
+        .camera-viewfinder {
+            width: 100%;
+            aspect-ratio: 4/3;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+            position: relative;
+        }
+        
+        #camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        
+        #camera-canvas {
+            display: none;
+        }
+        
+        #camera-snapshot {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .camera-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .btn-cam {
+            flex: 1;
+            padding: 9px 14px;
+            border-radius: 8px;
+            border: none;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .2s, transform .15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .btn-cam-capture {
+            background: var(--green-main);
+            color: #fff;
+        }
+        
+        .btn-cam-capture:hover {
+            background: var(--green-dark);
+        }
+        
+        .btn-cam-retake {
+            background: var(--green-light);
+            color: var(--green-dark);
+        }
+        
+        .btn-cam-retake:hover {
+            background: #d4edda;
+        }
+        
+        #camera-status {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            margin-top: 6px;
+            min-height: 18px;
+            text-align: center;
+        }
+        /* ══════════════════════════════════════════════ PREDICT BUTTON */
+        
+        .btn-predict {
+            width: 100%;
+            margin-top: 18px;
+            padding: 14px;
+            background: var(--green-dark);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: .3px;
+            transition: background .2s, transform .15s, box-shadow .2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-predict:hover {
+            background: var(--green-main);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(30, 100, 40, .2);
+        }
+        
+        .btn-predict:disabled {
+            background: var(--text-light);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        /* ══════════════════════════════════════════════ SPINNER */
+        
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, .4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+            display: none;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        /* ══════════════════════════════════════════════ RESULT CARD */
+        
+        .result-card {
+            position: relative;
+        }
+        
+        .live-badge {
+            position: absolute;
+            top: 28px;
+            right: 28px;
+            background: var(--green-light);
+            color: var(--green-dark);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .live-badge::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            background: var(--green-accent);
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: .5;
+                transform: scale(.8);
+            }
+        }
+        
+        .result-field {
+            margin-bottom: 20px;
+        }
+        
+        .result-field label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            color: var(--text-light);
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .disease-badge {
+            display: block;
+            width: 100%;
+            padding: 13px 16px;
+            background: var(--green-light);
+            color: var(--green-dark);
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            text-align: center;
+            transition: all .3s;
+        }
+        
+        .disease-badge.alert {
+            background: #fff3e0;
+            color: #b45309;
+            border-color: #f5c97a;
+        }
+        
+        .disease-badge.danger {
+            background: #ffebee;
+            color: #c62828;
+            border-color: #f5a0a0;
+        }
+        
+        .confidence-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 0.875rem;
+        }
+        
+        .confidence-pct {
+            font-weight: 700;
+            color: var(--green-dark);
+            font-size: 1rem;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: var(--green-light);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--green-mid), var(--green-accent));
+            border-radius: 4px;
+            width: 0%;
+            transition: width .8s cubic-bezier(.4, 0, .2, 1);
+        }
+        
+        .suggestion-box {
+            background: #f0faf2;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            font-size: 0.875rem;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+        
+        .suggestion-box strong {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--green-dark);
+        }
+        
+        .suggestion-box .icon-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        
+        .suggestion-box svg {
+            flex-shrink: 0;
+            color: var(--green-main);
+            margin-top: 2px;
+        }
+        
+        .prediction-note {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            background: rgba(226, 248, 226, 0.95);
+            border: 1px solid rgba(72, 176, 93, 0.22);
+            border-radius: 16px;
+            padding: 14px 16px;
+            margin-top: 16px;
+            font-size: 0.92rem;
+            color: var(--text-mid);
+            line-height: 1.5;
+        }
+        
+        .prediction-note svg {
+            flex-shrink: 0;
+            min-width: 18px;
+            margin-top: 2px;
+        }
+        
+        .prediction-note p {
+            margin: 0;
+        }
+        
+        @media (max-width: 640px) {
+            .prediction-note {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+        
+        .placeholder-text {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+        
+        .placeholder-text svg {
+            margin-bottom: 10px;
+            opacity: .35;
+        }
+        /* ══════════════════════════════════════════════ HOW IT WORKS */
+        
+        .how-section {
+            max-width: 900px;
+            margin: 0 auto 60px;
+            padding: 0 20px;
+            text-align: center;
+        }
+        
+        .how-section h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--green-dark);
+            margin-bottom: 6px;
+        }
+        
+        .how-section .sub {
+            color: var(--text-mid);
+            margin-bottom: 36px;
+        }
+        
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        
+        @media (max-width: 600px) {
+            .steps-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .step-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 20px;
+            box-shadow: var(--shadow);
+        }
+        
+        .step-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--green-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 14px;
+            color: var(--green-main);
+        }
+        
+        .step-card h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .step-card p {
+            font-size: 0.875rem;
+            color: var(--text-mid);
+        }
+        /* ══════════════════════════════════════════════ FOOTER */
+        
+        footer {
+            background: var(--white);
+            border-top: 1px solid var(--border);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .footer-brand {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            color: var(--green-dark);
+            font-size: 1.1rem;
+        }
+        
+        .footer-copy {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            flex: 1;
+            text-align: center;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .footer-links a {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            text-decoration: none;
+        }
+        
+        .footer-links a:hover {
+            color: var(--green-main);
+        }
+        /* ══════════════════════════════════════════════ ERROR TOAST */
+        
+        #error-toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #c62828;
+            color: #fff;
+            padding: 12px 22px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .2);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .3s;
+            z-index: 999;
+        }
+        
+        #error-toast.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ═══════════════════════════════════ NAVBAR -->
+    <nav>
+        <a href="#" class="nav-brand">AgriScan AI</a>
+        <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-label="Open navigation menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <div class="nav-menu" id="nav-menu">
+            <div class="nav-links">
+                <a href="#" class="active">Home</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#" onclick="alert('About: Final Year AI Crop Disease Detection Project')">About</a>
+            </div>
+            <button class="btn-get-started" onclick="document.getElementById('analysis-section').scrollIntoView({behavior:'smooth'})">
+                Get Started
+            </button>
+        </div>
+    </nav>
+
+    <!-- ═══════════════════════════════════ HERO -->
+    <section class="hero">
+        <h1>AI Crop Disease Detection System</h1>
+        <p>
+            Upload or capture a potato or cassava leaf image to detect diseases using artificial intelligence. Precision diagnostics for a healthier harvest.
+        </p>
+        <div class="hero-img-wrap">
+            <img src="https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=700&q=80" alt="Green crop field rows" />
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════ MAIN ANALYSIS GRID -->
+    <div class="main-grid" id="analysis-section">
+
+        <!-- ── LEFT: Analysis Engine ── -->
+        <div class="card">
+            <div class="card-title">
+                <!-- Target icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="6" />
+                    <circle cx="12" cy="12" r="2" />
+                </svg> Analysis Engine
+            </div>
+
+            <!-- Crop Type Selector -->
+            <label class="field-label" for="crop-select">Select Crop Type</label>
+            <select id="crop-select">
+                <option value="potato">Potato</option>
+                <option value="cassava">Cassava</option>
+            </select>
+
+            <!-- Upload / Camera Tabs -->
+            <div class="input-tabs">
+                <button class="tab-btn active" id="tab-upload" onclick="switchTab('upload')">
+                    <!-- Upload icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor" stroke-width="2">
+                        <polyline points="16 16 12 12 8 16" />
+                        <line x1="12" y1="12" x2="12" y2="21" />
+                        <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
+                    </svg>
+                    Upload Image
+                </button>
+                <button class="tab-btn" id="tab-camera" onclick="switchTab('camera')">
+                    <!-- Camera icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor" stroke-width="2">
+                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                        <circle cx="12" cy="13" r="4" />
+                    </svg>
+                    Use Camera
+                </button>
+            </div>
+
+            <!-- ── Upload Panel ── -->
+            <div id="upload-panel">
+                <div class="drop-zone" id="drop-zone">
+                    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <polyline points="16 16 12 12 8 16" />
+                        <line x1="12" y1="12" x2="12" y2="21" />
+                        <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
+                    </svg>
+                    <p>Click to upload or drag and drop</p>
+                    <small>Supports JPG, PNG (Max 5MB)</small>
+                    <img id="preview-img" alt="Preview" />
+                </div>
+            </div>
+
+            <!-- ── Camera Panel ── -->
+            <div id="camera-panel">
+                <div class="camera-viewfinder">
+                    <video id="camera-video" autoplay playsinline muted></video>
+                </div>
+                <canvas id="camera-canvas"></canvas>
+                <img id="camera-snapshot" alt="Captured leaf" />
+                <p id="camera-status">Click "Start Camera" to begin.</p>
+                <div class="camera-controls">
+                    <button class="btn-cam btn-cam-capture" id="btn-start-camera" onclick="startCamera()">
+                        <!-- Play icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                            viewBox="0 0 24 24">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                        Start Camera
+                    </button>
+                    <button class="btn-cam btn-cam-capture" id="btn-capture" onclick="capturePhoto()" style="display:none">
+                        <!-- Camera icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor" stroke-width="2.5">
+                            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                            <circle cx="12" cy="13" r="4" />
+                        </svg>
+                        Capture
+                    </button>
+                    <button class="btn-cam btn-cam-retake" id="btn-retake" onclick="retakePhoto()" style="display:none">
+                        <!-- Refresh icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor" stroke-width="2.5">
+                            <polyline points="1 4 1 10 7 10" />
+                            <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+                        </svg>
+                        Retake
+                    </button>
+                </div>
+            </div>
+            <!-- end camera panel -->
+
+            <!-- Predict Button -->
+            <button class="btn-predict" id="predict-btn" onclick="runPrediction()">
+                <span id="btn-label">Predict Disease</span>
+                <div class="spinner" id="btn-spinner"></div>
+            </button>
+        </div>
+        <!-- end left card -->
+
+        <!-- ── RIGHT: Diagnostic Result ── -->
+        <div class="card result-card" id="result-panel">
+            <div class="card-title">Diagnostic Result</div>
+            <span class="live-badge">Live AI Session</span>
+
+            <!-- Placeholder before any prediction -->
+            <div id="result-placeholder" class="placeholder-text">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
+                    <path d="M9 17H7a5 5 0 010-10h1M15 7h2a5 5 0 010 10h-1M8 12h8" />
+                </svg>
+                <p>Select a crop, upload or capture<br>a leaf image, then click Predict.</p>
+            </div>
+
+            <!-- Result (hidden until prediction runs) -->
+            <div id="result-content" style="display:none">
+                <div class="result-field">
+                    <label>Predicted Disease</label>
+                    <span class="disease-badge" id="disease-badge">—</span>
+                </div>
+
+                <div class="result-field">
+                    <div class="confidence-row">
+                        <span>Confidence Score</span>
+                        <span class="confidence-pct" id="conf-pct">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="conf-bar"></div>
+                    </div>
+                </div>
+
+                <div class="suggestion-box">
+                    <div class="icon-row">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <div>
+                            <strong>AI Suggestion</strong>
+                            <span id="suggestion-text">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="prediction-note">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--green-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <circle cx="12" cy="16" r="1" />
+                    </svg>
+                    <p>Predictions are most accurate when a clear potato or cassava leaf image is provided under good lighting conditions. Low-confidence predictions may be less reliable.</p>
+                </div>
+            </div>
+        </div>
+        <!-- end right card -->
+
+    </div>
+    <!-- end main grid -->
+
+    <!-- ═══════════════════════════════════ HOW IT WORKS -->
+    <section class="how-section" id="how-it-works">
+        <h2>How It Works</h2>
+        <p class="sub">Detect crop issues in three simple steps</p>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-icon">
+                    <!-- Leaf icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path d="M17 8C8 10 5.9 16.17 3.82 22M9.1 17.1C12 14 14 10 14 4c5 0 9 4 9 8-3 .5-5.5 1.5-7 3" />
+                    </svg>
+                </div>
+                <h3>1. Select Crop</h3>
+                <p>Choose between Potato or Cassava to prime our specialised AI models.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                        <circle cx="12" cy="13" r="4" />
+                    </svg>
+                </div>
+                <h3>2. Upload or Capture</h3>
+                <p>Take a clear photo of the affected leaf and upload it, or use your camera directly.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <path d="M3 9h18M9 21V9" />
+                    </svg>
+                </div>
+                <h3>3. Get Result</h3>
+                <p>Receive an instant diagnosis and confidence score from our AI engine.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════ FOOTER -->
+    <footer>
+        <span class="footer-brand">AgriScan AI</span>
+        <span class="footer-copy">© 2024 AgriScan AI. Nurturing global food security through precision.</span>
+        <div class="footer-links">
+            <a href="#">Privacy Policy</a>
+            <a href="#">Terms of Service</a>
+            <a href="#">Contact Support</a>
+        </div>
+    </footer>
+
+    <!-- Error Toast -->
+    <div id="error-toast"></div>
+
+    <!-- ═══════════════════════════════════ JAVASCRIPT -->
+    <script>
+        /* ────────────────────────────────────────────────────────────────
+                                                                                             STATE VARIABLES
+                                                                                             These track what input mode we're in and what image is ready.
+                                                                                          ──────────────────────────────────────────────────────────────── */
+        let activeTab = 'upload'; // 'upload' or 'camera'
+        let cameraStream = null; // MediaStream object when camera is active
+        let capturedImageB64 = null; // Base64 string from camera snapshot
+
+        /* ────────────────────────────────────────────────────────────────
+           TAB SWITCHING (Upload ↔ Camera)
+        ──────────────────────────────────────────────────────────────── */
+        function switchTab(tab) {
+            activeTab = tab;
+
+            // Update tab button styles
+            document.getElementById('tab-upload').classList.toggle('active', tab === 'upload');
+            document.getElementById('tab-camera').classList.toggle('active', tab === 'camera');
+
+            // Show / hide panels
+            document.getElementById('upload-panel').style.display = tab === 'upload' ? 'block' : 'none';
+            document.getElementById('camera-panel').style.display = tab === 'camera' ? 'block' : 'none';
+
+            // Stop camera if switching away
+            if (tab === 'upload') stopCamera();
+        }
+
+        /* ────────────────────────────────────────────────────────────────
+           FILE UPLOAD — preview thumbnail
+        ──────────────────────────────────────────────────────────────── */
+        const fileInput = document.getElementById('file-input');
+        const previewImg = document.getElementById('preview-img');
+        const dropZone = document.getElementById('drop-zone');
+
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            previewImg.src = url;
+            previewImg.style.display = 'block';
+        });
+
+        // Drag-and-drop visual feedback
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+
+        /* ────────────────────────────────────────────────────────────────
+           CAMERA — start, capture, retake, stop
+        ──────────────────────────────────────────────────────────────── */
+        async function startCamera() {
+            const video = document.getElementById('camera-video');
+            const status = document.getElementById('camera-status');
+            const btnStart = document.getElementById('btn-start-camera');
+            const btnCap = document.getElementById('btn-capture');
+
+            status.textContent = 'Requesting camera permission…';
+
+            try {
+                // Ask the browser for webcam access.
+                // On HTTPS or localhost this shows a permission popup.
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: {
+                            ideal: 1280
+                        },
+                        height: {
+                            ideal: 960
+                        }
+                    },
+                    audio: false
+                });
+
+                video.srcObject = cameraStream;
+                await video.play();
+
+                status.textContent = 'Camera active — point at a leaf and capture.';
+                btnStart.style.display = 'none';
+                btnCap.style.display = 'flex';
+                capturedImageB64 = null;
+                document.getElementById('camera-snapshot').style.display = 'none';
+
+            } catch (err) {
+                // Common errors:
+                // NotAllowedError  — user denied permission
+                // NotFoundError    — no camera device found
+                status.textContent = `⚠ Camera error: ${err.name}. Check permissions.`;
+                console.error('Camera error:', err);
+            }
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('camera-video');
+            const canvas = document.getElementById('camera-canvas');
+            const snapshot = document.getElementById('camera-snapshot');
+            const btnCap = document.getElementById('btn-capture');
+            const btnRet = document.getElementById('btn-retake');
+            const status = document.getElementById('camera-status');
+
+            // Draw the current video frame onto a hidden <canvas>
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert canvas to a Base64 PNG string
+            capturedImageB64 = canvas.toDataURL('image/png');
+
+            // Show the snapshot preview
+            snapshot.src = capturedImageB64;
+            snapshot.style.display = 'block';
+
+            // Pause / hide live video
+            video.pause();
+
+            btnCap.style.display = 'none';
+            btnRet.style.display = 'flex';
+            status.textContent = '✅ Photo captured! Click Predict Disease.';
+        }
+
+        function retakePhoto() {
+            const video = document.getElementById('camera-video');
+            const snapshot = document.getElementById('camera-snapshot');
+            const btnCap = document.getElementById('btn-capture');
+            const btnRet = document.getElementById('btn-retake');
+            const status = document.getElementById('camera-status');
+
+            capturedImageB64 = null;
+            snapshot.style.display = 'none';
+            video.play();
+
+            btnRet.style.display = 'none';
+            btnCap.style.display = 'flex';
+            status.textContent = 'Camera active — point at a leaf and capture.';
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(t => t.stop());
+                cameraStream = null;
+            }
+            const video = document.getElementById('camera-video');
+            const snapshot = document.getElementById('camera-snapshot');
+            const btnStart = document.getElementById('btn-start-camera');
+            const btnCap = document.getElementById('btn-capture');
+            const btnRet = document.getElementById('btn-retake');
+            const status = document.getElementById('camera-status');
+
+            video.srcObject = null;
+            snapshot.style.display = 'none';
+            capturedImageB64 = null;
+
+            btnStart.style.display = 'flex';
+            btnCap.style.display = 'none';
+            btnRet.style.display = 'none';
+            status.textContent = 'Click "Start Camera" to begin.';
+        }
+
+        /* ────────────────────────────────────────────────────────────────
+           MAIN PREDICTION FUNCTION
+           Called when the user clicks "Predict Disease".
+           Decides whether to POST a file (upload mode) or Base64 (camera mode).
+        ──────────────────────────────────────────────────────────────── */
+        async function runPrediction() {
+            const cropType = document.getElementById('crop-select').value;
+            const btn = document.getElementById('predict-btn');
+            const label = document.getElementById('btn-label');
+            const spinner = document.getElementById('btn-spinner');
+
+            // Show loading state
+            btn.disabled = true;
+            label.textContent = 'Analysing…';
+            spinner.style.display = 'block';
+
+            try {
+                let result;
+
+                if (activeTab === 'upload') {
+                    // ── Upload mode: send image as multipart/form-data ────────────
+                    const file = fileInput.files[0];
+                    if (!file) {
+                        showError('Please upload an image first.');
+                        resetPredictButton(btn, label, spinner);
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('crop', cropType);
+                    formData.append('image', file);
+
+                    const response = await fetch('/predict', {
+                        method: 'POST',
+                        body: formData // No Content-Type header — browser sets it automatically
+                    });
+                    result = await response.json();
+
+                } else {
+                    // ── Camera mode: send Base64 image as JSON ────────────────────
+                    if (!capturedImageB64) {
+                        showError('Please capture a photo first.');
+                        resetPredictButton(btn, label, spinner);
+                        return;
+                    }
+
+                    const response = await fetch('/predict_camera', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            crop: cropType,
+                            image: capturedImageB64
+                        })
+                    });
+                    result = await response.json();
+                }
+
+                // ── Handle error from Flask ────────────────────────────────────
+                if (result.error) {
+                    showError(result.error);
+                    resetPredictButton(btn, label, spinner);
+                    return;
+                }
+
+                // ── Display the result (this will change button to Clear) ───────
+                displayResult(result);
+
+            } catch (err) {
+                showError('Network error — is Flask running? ' + err.message);
+                resetPredictButton(btn, label, spinner);
+            }
+        }
+
+        function resetPredictButton(btn, label, spinner) {
+            btn.disabled = false;
+            label.textContent = 'Predict Disease';
+            spinner.style.display = 'none';
+        }
+
+        /* ────────────────────────────────────────────────────────────────
+           DISPLAY RESULT in the right card
+        ──────────────────────────────────────────────────────────────── */
+        function displayResult(data) {
+            const {
+                disease,
+                confidence,
+                suggestion
+            } = data;
+
+            // Hide placeholder, show results
+            document.getElementById('result-placeholder').style.display = 'none';
+            document.getElementById('result-content').style.display = 'block';
+
+            // Disease badge — colour based on result
+            const badge = document.getElementById('disease-badge');
+            badge.textContent = disease;
+            badge.className = 'disease-badge';
+            if (disease.toLowerCase().includes('healthy')) {
+                // keep default green
+            } else if (disease.toLowerCase().includes('blight') || disease.toLowerCase().includes('mosaic')) {
+                badge.classList.add('danger');
+            } else {
+                badge.classList.add('alert');
+            }
+
+            // Confidence bar
+            document.getElementById('conf-pct').textContent = confidence + '%';
+            // Small delay so the CSS transition is visible
+            setTimeout(() => {
+                document.getElementById('conf-bar').style.width = confidence + '%';
+            }, 50);
+
+            // Suggestion
+            document.getElementById('suggestion-text').textContent = suggestion;
+
+            // Scroll result into view on mobile
+            document.getElementById('result-panel').scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest'
+            });
+
+            // Change button to Clear after successful prediction
+            const btn = document.getElementById('predict-btn');
+            const label = document.getElementById('btn-label');
+            btn.disabled = false;
+            label.textContent = 'Clear';
+            btn.onclick = clearResults;
+        }
+
+        /* ────────────────────────────────────────────────────────────────
+           CLEAR / RESET FUNCTION
+           Resets all data and UI to initial state without page reload
+        ──────────────────────────────────────────────────────────────── */
+        function clearResults() {
+            // ── Hide results, show placeholder ─────────────────────────────────
+            document.getElementById('result-content').style.display = 'none';
+            document.getElementById('result-placeholder').style.display = 'block';
+
+            // ── Reset confidence bar ───────────────────────────────────────────
+            document.getElementById('conf-pct').textContent = '0%';
+            document.getElementById('conf-bar').style.width = '0%';
+
+            // ── Clear disease and suggestion text ──────────────────────────────
+            document.getElementById('disease-badge').textContent = '—';
+            document.getElementById('disease-badge').className = 'disease-badge';
+            document.getElementById('suggestion-text').textContent = '—';
+
+            // ── Reset upload input ─────────────────────────────────────────────
+            fileInput.value = '';
+            previewImg.style.display = 'none';
+            previewImg.src = '';
+
+            // ── Reset camera ──────────────────────────────────────────────────
+            stopCamera();
+            document.getElementById('camera-snapshot').style.display = 'none';
+            capturedImageB64 = null;
+
+            // ── Reset button to "Predict Disease" ──────────────────────────────
+            const btn = document.getElementById('predict-btn');
+            const label = document.getElementById('btn-label');
+            const spinner = document.getElementById('btn-spinner');
+            label.textContent = 'Predict Disease';
+            spinner.style.display = 'none';
+            btn.disabled = false;
+            btn.onclick = runPrediction;
+
+            // ── Optional: scroll to analysis section ────────────────────────────
+            document.getElementById('analysis-section').scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+
+        /* ────────────────────────────────────────────────────────────────
+           ERROR TOAST
+        ──────────────────────────────────────────────────────────────── */
+        function toggleMobileNav() {
+            const toggle = document.getElementById('nav-toggle');
+            const menu = document.getElementById('nav-menu');
+            const isOpen = toggle.classList.toggle('active');
+            menu.classList.toggle('open', isOpen);
+            toggle.setAttribute('aria-expanded', String(isOpen));
+        }
+
+        function closeMobileNav() {
+            const toggle = document.getElementById('nav-toggle');
+            const menu = document.getElementById('nav-menu');
+            toggle.classList.remove('active');
+            menu.classList.remove('open');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+
+        document.getElementById('nav-toggle').addEventListener('click', toggleMobileNav);
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    closeMobileNav();
+                }
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                closeMobileNav();
+            }
+        });
+
+        function showError(msg) {
+            const toast = document.getElementById('error-toast');
+            toast.textContent = '⚠ ' + msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+    </script>
+</body>
+
+</html>
