@@ -1,5 +1,5 @@
 """
-AgriScan AI - Crop Disease Detection System
+Crop Disease Detection System
 app.py — Main Flask backend file
 
 This file does the following:
@@ -15,7 +15,11 @@ import os                          # For file-path operations
 import io                          # For handling image bytes in memory
 import base64                      # For decoding camera images sent as Base64
 import textwrap                    # For wrapping text in PDF report
+import threading                   # Prevents duplicate model loads during concurrent requests
 from datetime import datetime
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+
 import numpy as np                 # Numerical processing (model input arrays)
 
 from flask import (
@@ -51,6 +55,26 @@ CASSAVA_CLASSES = [
     "Mosaic Disease",
 ]
 
+# ─── Lazy Model Cache ────────────────────────────────────────────────────────
+# Models are loaded only on the first prediction request for the selected crop,
+# then cached in memory for later requests. This keeps Render startup lean and
+# avoids loading both large models at once.
+MODEL_CACHE = {}
+MODEL_LOCK = threading.Lock()
+
+
+def _configure_tensorflow_memory() -> None:
+    """Avoid TensorFlow grabbing all available memory at once."""
+    try:
+        gpus = tf.config.list_physical_devices("GPU")
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except Exception:
+        pass
+
+
+_configure_tensorflow_memory()
+
 # ─── Disease Suggestions ──────────────────────────────────────────────────────
 # Short treatment / management advice shown to the user after prediction.
 SUGGESTIONS = {
@@ -81,24 +105,37 @@ SUGGESTIONS = {
     ),
 }
 
-# ─── Load Models Once at Startup ──────────────────────────────────────────────
-# We load both models when Flask starts so predictions are instant.
-print("⏳ Loading models — please wait...")
+# ─── Lazy Model Loader ──────────────────────────────────────────────────────
+def get_model_for_crop(crop_type: str) -> tuple:
+    """Load a model only when first needed and cache it globally."""
+    normalized_crop = crop_type.lower().strip()
 
-potato_model  = None
-cassava_model = None
+    if normalized_crop not in {"potato", "cassava"}:
+        raise ValueError(f"Unknown crop type: '{crop_type}'.")
 
-if os.path.exists(POTATO_MODEL_PATH):
-    potato_model = tf.keras.models.load_model(POTATO_MODEL_PATH)
-    print(f"✅ Potato model loaded from  '{POTATO_MODEL_PATH}'")
-else:
-    print(f"⚠️  Potato model NOT found at '{POTATO_MODEL_PATH}' — predictions will fail.")
+    if normalized_crop in MODEL_CACHE:
+        return MODEL_CACHE[normalized_crop]["model"], MODEL_CACHE[normalized_crop]["labels"]
 
-if os.path.exists(CASSAVA_MODEL_PATH):
-    cassava_model = tf.keras.models.load_model(CASSAVA_MODEL_PATH)
-    print(f"✅ Cassava model loaded from '{CASSAVA_MODEL_PATH}'")
-else:
-    print(f"⚠️  Cassava model NOT found at '{CASSAVA_MODEL_PATH}' — predictions will fail.")
+    with MODEL_LOCK:
+        if normalized_crop in MODEL_CACHE:
+            return MODEL_CACHE[normalized_crop]["model"], MODEL_CACHE[normalized_crop]["labels"]
+
+        if normalized_crop == "potato":
+            model_path = POTATO_MODEL_PATH
+            labels = POTATO_CLASSES
+        else:
+            model_path = CASSAVA_MODEL_PATH
+            labels = CASSAVA_CLASSES
+
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+
+        print(f"⏳ Loading {normalized_crop} model on first request...")
+        model = tf.keras.models.load_model(model_path, compile=False)
+        MODEL_CACHE[normalized_crop] = {"model": model, "labels": labels}
+        print(f"✅ {normalized_crop.capitalize()} model cached for future predictions.")
+        return model, labels
+
 
 print("🚀 Server ready!\n")
 
@@ -123,7 +160,7 @@ def preprocess_image(image: Image.Image, target_size=(224, 224)) -> np.ndarray:
     """
     image = image.convert("RGB")                          # Ensure 3-channel RGB
     image = image.resize(target_size)                     # Resize to model's expected input
-    img_array = np.array(image, dtype=np.float32)         # Convert to NumPy float array
+    img_array = np.asarray(image, dtype=np.float32)       # Convert to NumPy float array
     img_array = img_array / 255.0                         # Normalise to [0, 1]
     img_array = np.expand_dims(img_array, axis=0)         # Add batch dimension: (1, 224, 224, 3)
     return img_array
@@ -141,9 +178,9 @@ def predict(model, class_labels: list, img_array: np.ndarray) -> dict:
 
     Returns a dict: { "disease": str, "confidence": float (0–100) }
     """
-    predictions = model.predict(img_array)          # Shape: (1, num_classes)
-    class_index = int(np.argmax(predictions[0]))    # Index of highest probability
-    confidence  = float(np.max(predictions[0]))     # The highest probability value
+    predictions = model.predict(img_array, verbose=0)  # Shape: (1, num_classes)
+    class_index = int(np.argmax(predictions[0]))       # Index of highest probability
+    confidence  = float(np.max(predictions[0]))        # The highest probability value
 
     disease_name = class_labels[class_index]        # Map index → class name
     confidence_pct = round(confidence * 100, 2)     # Convert to percentage
@@ -196,19 +233,13 @@ def predict_route():
     if ext not in allowed_extensions:
         return jsonify({"error": "Unsupported file type. Use JPG or PNG."}), 400
 
-    # ── 3. Choose model & classes ────────────────────────────────────────────
-    if crop_type == "potato":
-        if potato_model is None:
-            return jsonify({"error": "Potato model not loaded. Check server logs."}), 500
-        model  = potato_model
-        labels = POTATO_CLASSES
-    elif crop_type == "cassava":
-        if cassava_model is None:
-            return jsonify({"error": "Cassava model not loaded. Check server logs."}), 500
-        model  = cassava_model
-        labels = CASSAVA_CLASSES
-    else:
-        return jsonify({"error": f"Unknown crop type: '{crop_type}'."}), 400
+    # ── 3. Load model lazily ────────────────────────────────────────────────
+    try:
+        model, labels = get_model_for_crop(crop_type)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 500
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     # ── 4. Open & preprocess image ───────────────────────────────────────────
     try:
@@ -252,17 +283,13 @@ def predict_camera():
     if not image_data:
         return jsonify({"error": "No camera image received."}), 400
 
-    # ── Choose model ─────────────────────────────────────────────────────────
-    if crop_type == "potato":
-        if potato_model is None:
-            return jsonify({"error": "Potato model not loaded."}), 500
-        model, labels = potato_model, POTATO_CLASSES
-    elif crop_type == "cassava":
-        if cassava_model is None:
-            return jsonify({"error": "Cassava model not loaded."}), 500
-        model, labels = cassava_model, CASSAVA_CLASSES
-    else:
-        return jsonify({"error": f"Unknown crop type: '{crop_type}'."}), 400
+    # ── Load model lazily ───────────────────────────────────────────────────
+    try:
+        model, labels = get_model_for_crop(crop_type)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 500
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     # ── Decode Base64 image ───────────────────────────────────────────────────
     try:
@@ -343,6 +370,5 @@ def download_report():
         return jsonify({"error": f"Could not generate report: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    # debug=True: Flask reloads automatically when you save app.py
-    # Remove debug=True when presenting / deploying
-    app.run(debug=True, port=5000)
+    # Local development only. Render should use Gunicorn instead.
+    app.run(debug=False, port=5000)
