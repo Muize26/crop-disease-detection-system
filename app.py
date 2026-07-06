@@ -29,10 +29,11 @@ from flask import (
     jsonify,                       # Returns JSON responses to the browser
     send_file                      # Sends generated PDF back to the browser
 )
-from PIL import Image              # Pillow — opens and resizes images
+from PIL import Image, ImageOps
 import tensorflow as tf            # TensorFlow / Keras for loading models
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.utils import ImageReader
 
 # ─── Flask App Initialisation ─────────────────────────────────────────────────
 app = Flask(__name__)
@@ -323,9 +324,23 @@ def download_report():
     disease = data.get("disease", "")
     confidence = data.get("confidence")
     suggestion = data.get("suggestion", "")
+    image_data = data.get("image_data", "")
 
     if not crop_type or not disease or confidence is None or not suggestion:
         return jsonify({"error": "Missing required report fields."}), 400
+
+    report_image = None
+    if image_data:
+        try:
+            if "," in image_data:
+                image_data = image_data.split(",", 1)[1]
+            image_bytes = base64.b64decode(image_data)
+            report_image = Image.open(io.BytesIO(image_bytes))
+            report_image = ImageOps.exif_transpose(report_image)
+            if report_image.mode not in ("RGB", "L"):
+                report_image = report_image.convert("RGB")
+        except Exception:
+            report_image = None
 
     try:
         buffer = io.BytesIO()
@@ -333,30 +348,99 @@ def download_report():
         pdf = canvas.Canvas(buffer, pagesize=letter)
         pdf.setTitle("AgriScan AI Diagnostic Report")
 
-        pdf.setFont("Helvetica-Bold", 22)
+        pdf.setFont("Helvetica-Bold", 26)
+        pdf.setFillColorRGB(0.10, 0.40, 0.18)
         pdf.drawString(50, page_height - 70, "AgriScan AI")
 
         pdf.setFont("Helvetica", 12)
+        pdf.setFillColorRGB(0, 0, 0)
+        pdf.drawString(50, page_height - 98, "AI Crop Disease Diagnostic Report")
+
+        pdf.setStrokeColorRGB(0.78, 0.78, 0.78)
+        pdf.setLineWidth(1)
+        pdf.line(50, page_height - 108, page_width - 50, page_height - 108)
+
+        left_x = 50
+        current_y = page_height - 140
+        line_height = 18
+
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left_x, current_y, "Date & Time")
+        pdf.setFont("Helvetica", 10)
         timestamp = datetime.now().strftime("%B %d, %Y %H:%M")
-        pdf.drawString(50, page_height - 100, f"Report date: {timestamp}")
-        pdf.drawString(50, page_height - 120, f"Crop type: {crop_type}")
-        pdf.drawString(50, page_height - 140, f"Predicted disease: {disease}")
-        pdf.drawString(50, page_height - 160, f"Confidence: {confidence}%")
+        pdf.drawString(left_x, current_y - line_height, timestamp)
 
-        pdf.line(50, page_height - 170, page_width - 50, page_height - 170)
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left_x, current_y - 2 * line_height - 4, "Crop Type")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(left_x, current_y - 3 * line_height - 4, crop_type)
 
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(50, page_height - 190, "AI suggestion / treatment")
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left_x, current_y - 4 * line_height - 10, "Predicted Disease")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(left_x, current_y - 5 * line_height - 10, disease)
 
-        pdf.setFont("Helvetica", 11)
-        wrapped_suggestion = textwrap.wrap(suggestion, width=80)
-        text_object = pdf.beginText(50, page_height - 210)
-        text_object.setLeading(16)
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left_x, current_y - 6 * line_height - 16, "Confidence")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(left_x, current_y - 7 * line_height - 16, f"{confidence}%")
+
+        pdf.setStrokeColorRGB(0.85, 0.85, 0.85)
+        pdf.roundRect(45, current_y - 7 * line_height - 34, page_width - 90, 140, radius=10, stroke=1, fill=0)
+
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.setFillColorRGB(0.10, 0.40, 0.18)
+        pdf.drawString(50, current_y - 7 * line_height - 54, "AI Recommendation / Treatment")
+
+        pdf.setFont("Helvetica", 10)
+        pdf.setFillColorRGB(0, 0, 0)
+        wrapped_suggestion = textwrap.wrap(suggestion, width=85)
+        text_object = pdf.beginText(50, current_y - 7 * line_height - 72)
+        text_object.setLeading(14)
         for line in wrapped_suggestion:
             text_object.textLine(line)
         pdf.drawText(text_object)
 
-        pdf.showPage()
+        image_frame_x = 50
+        image_frame_y = 110
+        image_frame_width = page_width - 100
+        image_frame_height = 230
+
+        pdf.setStrokeColorRGB(0.78, 0.78, 0.78)
+        pdf.setLineWidth(1)
+        pdf.roundRect(image_frame_x, image_frame_y, image_frame_width, image_frame_height, radius=10, stroke=1, fill=0)
+
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.setFillColorRGB(0.10, 0.40, 0.18)
+        pdf.drawString(image_frame_x + 10, image_frame_y + image_frame_height + 16, "Uploaded Leaf Image")
+
+        if report_image is not None:
+            img_width, img_height = report_image.size
+            max_width = image_frame_width - 30
+            max_height = image_frame_height - 30
+            scale = min(max_width / img_width, max_height / img_height, 1)
+            display_width = img_width * scale
+            display_height = img_height * scale
+            display_x = image_frame_x + (image_frame_width - display_width) / 2
+            display_y = image_frame_y + (image_frame_height - display_height) / 2
+            pdf.drawImage(
+                ImageReader(report_image),
+                display_x,
+                display_y,
+                width=display_width,
+                height=display_height,
+                preserveAspectRatio=True,
+                anchor="c"
+            )
+        else:
+            pdf.setFont("Helvetica-Oblique", 10)
+            pdf.setFillColorRGB(0.45, 0.45, 0.45)
+            pdf.drawCentredString(image_frame_x + image_frame_width / 2, image_frame_y + image_frame_height / 2, "Image preview not available")
+
+        pdf.setFont("Helvetica", 9)
+        pdf.setFillColorRGB(0.45, 0.45, 0.45)
+        pdf.drawCentredString(page_width / 2, 40, "Generated automatically by AgriScan AI")
+
         pdf.save()
         buffer.seek(0)
 
