@@ -409,40 +409,129 @@ function showError(msg) {
 }
 
 async function downloadReport() {
+    console.log("[DEBUG] downloadReport() called");
     const payload = window.latestReportPayload;
     if (!payload || !payload.disease) {
+        console.log("[DEBUG] No payload available");
         showError("Please generate a prediction before downloading a report.");
         return;
     }
+
+    console.log("[DEBUG] Payload structure:", {
+        crop: payload.crop,
+        disease: payload.disease,
+        confidence: payload.confidence,
+        suggestion: payload.suggestion ?
+            payload.suggestion.substring(0, 50) + "..." :
+            "none",
+        image_data_length: payload.image_data ? payload.image_data.length : 0,
+    });
 
     const button = document.getElementById("download-report-btn");
     button.disabled = true;
     button.textContent = "Generating report…";
 
     try {
+        // FIX for iPhone: Exclude large Base64 image_data on iOS to prevent
+        // "The string did not match the expected pattern" error.
+        // On iOS Safari, the 5-15MB Base64 string from camera captures causes
+        // issues with JSON parsing and blob download handling.
+        // The Flask route already handles empty image_data by showing a placeholder.
+        const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        console.log("[DEBUG] Detected iOS device:", isIOSDevice);
+
+        const payloadForServer = {
+            crop: payload.crop,
+            disease: payload.disease,
+            confidence: payload.confidence,
+            suggestion: payload.suggestion,
+            image_data: isIOSDevice ? "" : payload.image_data || "",
+        };
+
+        if (isIOSDevice) {
+            console.log(
+                "[DEBUG] iOS detected - excluding image_data to prevent blob download issue",
+            );
+        }
+
+        console.log("[DEBUG] Sending fetch request to /download_report");
+        const jsonBody = JSON.stringify(payloadForServer);
+        console.log("[DEBUG] JSON body size:", jsonBody.length, "bytes");
+
         const response = await fetch("/download_report", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify(payload),
+            body: jsonBody,
         });
 
+        console.log(
+            "[DEBUG] Fetch completed. Status:",
+            response.status,
+            "OK:",
+            response.ok,
+        );
+        console.log(
+            "[DEBUG] Response headers - Content-Type:",
+            response.headers.get("Content-Type"),
+        );
+        console.log(
+            "[DEBUG] Response headers - Content-Disposition:",
+            response.headers.get("Content-Disposition"),
+        );
+        console.log(
+            "[DEBUG] Response headers - Content-Length:",
+            response.headers.get("Content-Length"),
+        );
+
         if (!response.ok) {
+            console.log("[DEBUG] Response not OK, trying to parse error");
             const errorData = await response.json();
+            console.log("[DEBUG] Error from server:", errorData);
             throw new Error(errorData.error || "Report generation failed.");
         }
 
+        console.log("[DEBUG] Reading blob from response");
         const blob = await response.blob();
+        console.log(
+            "[DEBUG] Blob created. Type:",
+            blob.type,
+            "Size:",
+            blob.size,
+            "bytes",
+        );
+
+        console.log("[DEBUG] Creating object URL from blob");
         const url = URL.createObjectURL(blob);
+        console.log("[DEBUG] Object URL created:", url);
+
+        console.log("[DEBUG] Creating anchor element");
         const link = document.createElement("a");
         link.href = url;
         link.download = "AgriScan_Report.pdf";
+        console.log("[DEBUG] Link download attribute set to:", link.download);
+
+        console.log("[DEBUG] Appending link to document.body");
         document.body.appendChild(link);
+
+        console.log("[DEBUG] Clicking link to trigger download");
         link.click();
+
+        console.log("[DEBUG] Removing link from document");
         link.remove();
+
+        console.log("[DEBUG] Revoking object URL");
         URL.revokeObjectURL(url);
+
+        console.log("[DEBUG] Download completed successfully");
     } catch (err) {
+        console.error(
+            "[DEBUG] Error in downloadReport:",
+            err.name,
+            err.message,
+            err.stack,
+        );
         showError(err.message);
     } finally {
         button.disabled = false;

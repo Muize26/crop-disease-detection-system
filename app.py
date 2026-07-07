@@ -316,37 +316,67 @@ def predict_camera():
 @app.route("/download_report", methods=["POST"])
 def download_report():
     """Generate a PDF report from the latest diagnosis and return it."""
+    print("[DEBUG] /download_report route called")
+    print(f"[DEBUG] User-Agent: {request.headers.get('User-Agent', 'N/A')}")
+    
     data = request.get_json(silent=True)
     if not data:
+        print("[DEBUG] No JSON data received")
         return jsonify({"error": "Invalid report request."}), 400
 
+    print(f"[DEBUG] Received JSON data keys: {list(data.keys())}")
+    
     crop_type = data.get("crop", "").capitalize()
     disease = data.get("disease", "")
     confidence = data.get("confidence")
     suggestion = data.get("suggestion", "")
     image_data = data.get("image_data", "")
 
+    print(f"[DEBUG] crop_type: {crop_type}")
+    print(f"[DEBUG] disease: {disease}")
+    print(f"[DEBUG] confidence: {confidence}")
+    print(f"[DEBUG] suggestion length: {len(suggestion) if suggestion else 0}")
+    print(f"[DEBUG] image_data length: {len(image_data) if image_data else 0}")
+
     if not crop_type or not disease or confidence is None or not suggestion:
+        print(f"[DEBUG] Validation failed - crop_type:{bool(crop_type)}, disease:{bool(disease)}, confidence:{confidence is not None}, suggestion:{bool(suggestion)}")
         return jsonify({"error": "Missing required report fields."}), 400
 
     report_image = None
     if image_data:
+        print(f"[DEBUG] Image data present - attempting decode")
         try:
             if "," in image_data:
-                image_data = image_data.split(",", 1)[1]
-            image_bytes = base64.b64decode(image_data)
+                image_data_stripped = image_data.split(",", 1)[1]
+                print(f"[DEBUG] Data URL prefix removed. Original length: {len(image_data)}, stripped length: {len(image_data_stripped)}")
+            else:
+                image_data_stripped = image_data
+                print(f"[DEBUG] No data URL prefix found. Length: {len(image_data_stripped)}")
+            
+            image_bytes = base64.b64decode(image_data_stripped)
+            print(f"[DEBUG] Base64 decoded successfully. Bytes length: {len(image_bytes)}")
+            
             report_image = Image.open(io.BytesIO(image_bytes))
+            print(f"[DEBUG] Image opened. Mode: {report_image.mode}, Size: {report_image.size}")
+            
             report_image = ImageOps.exif_transpose(report_image)
+            print(f"[DEBUG] EXIF transpose applied. New mode: {report_image.mode}, New size: {report_image.size}")
+            
             if report_image.mode not in ("RGB", "L"):
                 report_image = report_image.convert("RGB")
-        except Exception:
+                print(f"[DEBUG] Image converted to RGB")
+        except Exception as e:
+            print(f"[DEBUG] Image decode error: {type(e).__name__}: {str(e)}")
             report_image = None
+    else:
+        print(f"[DEBUG] No image data provided")
 
     try:
+        print(f"[DEBUG] Starting PDF generation")
         buffer = io.BytesIO()
         page_width, page_height = letter
         pdf = canvas.Canvas(buffer, pagesize=letter)
-        pdf.setTitle("AgriScan AI Diagnostic Report")
+        pdf.setTitle("AI Crop Multi-Disease Detection System Report")
 
         pdf.setFont("Helvetica-Bold", 26)
         pdf.setFillColorRGB(0.10, 0.40, 0.18)
@@ -354,7 +384,7 @@ def download_report():
 
         pdf.setFont("Helvetica", 12)
         pdf.setFillColorRGB(0, 0, 0)
-        pdf.drawString(50, page_height - 98, "AI Crop Disease Diagnostic Report")
+        pdf.drawString(50, page_height - 98, "AI Crop Multi-Disease Detection System Report")
 
         pdf.setStrokeColorRGB(0.78, 0.78, 0.78)
         pdf.setLineWidth(1)
@@ -439,18 +469,34 @@ def download_report():
 
         pdf.setFont("Helvetica", 9)
         pdf.setFillColorRGB(0.45, 0.45, 0.45)
-        pdf.drawCentredString(page_width / 2, 40, "Generated automatically by AgriScan AI")
+        pdf.drawCentredString(page_width / 2, 40, "Generated automatically by AAITCDDS")
 
         pdf.save()
         buffer.seek(0)
 
-        return send_file(
+        print(f"[DEBUG] PDF generated successfully. Buffer size: {buffer.getbuffer().nbytes} bytes")
+        print(f"[DEBUG] Preparing send_file response with filename: AgriScan_Report.pdf")
+        print(f"[DEBUG] Content-Type will be: application/pdf")
+        print(f"[DEBUG] as_attachment: True, download_name: AgriScan_Report.pdf")
+
+        response = send_file(
             buffer,
             as_attachment=True,
             download_name="AgriScan_Report.pdf",
             mimetype="application/pdf"
         )
+        
+        print(f"[DEBUG] send_file() returned. Response headers:")
+        print(f"[DEBUG]   Content-Type: {response.headers.get('Content-Type', 'N/A')}")
+        print(f"[DEBUG]   Content-Disposition: {response.headers.get('Content-Disposition', 'N/A')}")
+        print(f"[DEBUG]   Content-Length: {response.headers.get('Content-Length', 'N/A')}")
+        print(f"[DEBUG] Response status: {response.status_code}")
+        
+        return response
     except Exception as e:
+        print(f"[DEBUG] Exception during PDF generation: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Could not generate report: {str(e)}"}), 500
 
 if __name__ == "__main__":
